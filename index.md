@@ -1,3 +1,3 @@
 ## HW 1
 
-[click here](https://github.com/BU-IE-360/spring21-veysel-yilmaz/HW.html)
+[click here](https://bu-ie-360.github.io/spring21-veysel-yilmaz/HW.html)
