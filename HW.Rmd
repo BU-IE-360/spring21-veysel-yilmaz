@@ -1,0 +1,164 @@
+---
+title: "HW1"
+author: "Veysel Yılmaz"
+date: "4/14/2021"
+output: html_document
+---
+
+```{r}
+library(readxl)
+library(zoo)
+library(tidyverse)
+library(knitr)
+library(tinytex)
+library(openxlsx)
+library(gtrendsR)
+library(reshape2)
+library(ggplot2)
+
+```
+
+## CB Data of Turkey
+
+### Collecting Data
+
+```{r}
+CB <- read.xlsx("C:\\Users\\Veysel\\Documents\\HW1\\CB.xlsx")
+CB %>% glimpse()
+```
+
+### Preparation Data
+
+The Balance Sheet Statistics of Central Bank of Turkey is prepared to utilize data types. I made use of transform function.
+
+```{r}
+CB <-transform(CB,CentralBank=as.numeric(CentralBank),Date=as.yearmon(Date))
+CB %>% glimpse()
+```
+
+
+### Plotting
+
+Secondly, I made a line chart of CB Data with plot function.
+
+```{r}
+plot(CB,type = "o", col = "darkblue", xlab = "Date", ylab = "CB",
+   main = "Central Bank Values")
+```
+
+### Analysis
+In a big picture, there is an increasing trend. It made sense while considering the dynamics of Turkish economy.Moreover, after the second quarter of 2018, there is a jump in the slope of trend with a small fluctuations later on. The reason might be the boom in the dollar value in August 2018.
+
+## Loans Data
+
+### Gathering Data
+
+```{r}
+Loans <- read.xlsx("C:\\Users\\Veysel\\Documents\\HW1\\Loans.xlsx")
+Loans  %>% glimpse()
+                      
+```
+### Preparation of Data
+
+```{r}
+Loans <-transform(Loans,Loans=as.numeric(Loans),Date=as.yearmon(Date))
+```
+
+### Plotting
+
+Secondly, I made a line chart of Loans Data with plot function.
+
+```{r}
+plot(Loans,type = "o", col = "red2", xlab = "Date", ylab = "Loans",
+   main = "Taken Loans")
+```
+
+
+### Analysis
+
+Loans can be divided into 2 parts. From 2016 to midyear of 2018, it made mean constant rise in a range. In the rest of the months, there was a rapid increase according to first part, however it,then, is in a fixed range. After that, the overall trend is still in rise with some changes.
+
+## TermDeposit Data
+TD is the balance sheet statistics of banking sector.
+
+### Gathering Data
+
+```{r}
+TD <- read.xlsx("C:\\Users\\Veysel\\Documents\\HW1\\TD.xlsx")
+TD %>% glimpse()
+                      
+```
+### Preparing Data
+
+```{r}
+TD<-transform(TD,TermDeposit=as.numeric(TermDeposit),Date=as.yearmon(Date))
+TD %>% glimpse()
+```
+
+### Plotting
+
+Secondly, I made a line chart of Term Deposit Data with plot function.
+
+```{r}
+plot(TD,type = "o", col = "red2", xlab = "Date", ylab = "TD",
+   main = "TERM DEPOSIT")
+```
+
+
+### Analysis
+
+The behavior of TD is scrutinized in 2 parts resemble the behavior of Loans. From 2016 to midyear of 2018, there is a stable and rising trend. After unusual observation after the midyear, the values kept rising after its balance to the trend. It can be said that unusual values are observed in the midyear of 2018 and the last quarter of the 2020.
+
+## Comparison of Three Balance Sheet Values
+
+  Overall, depreciation of TRY has a direct impact on loans, term deposit and balance sheet of CB, which can easily be seen in August 14 2018. Therefore, fluctuations in CB is justifiable and acceptable. However, due to the strange change in dollar value in Turkey, the behavior of CB is logical to some extent. 
+  The balance sheet of CB is the most affected among 3 statistics given. After the depreciation of TRY on the 14th of August 2018, CB statistics had the worst changes compared to TD and Loans, whereas TD statistics had the smoothest changes. Among these three statistics, there is a positive correlation, especially the time when dollar value changed. Thus, USD-TRY changes directly affect the CB, TD and especially loans.
+  
+.
+
+# Part 2
+
+## USDTRY Currency and Google Trends Sentiment
+
+I used gtrendsR, ggplot2 and reshape2 libraries.
+
+
+I defined the keyword that I researched.
+
+```{r,message=FALSE,warning=FALSE}
+keywords=c("TL","Dolar")
+```
+
+I defined the country of the observations.
+
+```{r,message=FALSE,warning=FALSE}
+country=c('TR')
+```
+
+I determine the time interval of my analysis.
+
+```{r,message=FALSE,warning=FALSE}
+period=("2016-02-01 2021-02-01")
+```
+
+I selected only interest over time 
+
+```{r,message=FALSE,warning=FALSE}
+value = gtrends(keywords, geo=country, time = period )
+time_trend=value$interest_over_time
+```
+
+I plotted.
+
+```{r}
+plot<-ggplot(data=time_trend, aes(x=date, y=hits,group=keyword,col=keyword))+
+        geom_line()+xlab('Time')+ylab('Relative Interest')+ theme_bw()+
+        theme(legend.title = element_blank(),legend.position="bottom",legend.text=element_text(size=14))+ggtitle("Google Search Volume")
+plot
+```
+
+## Comments
+
+In the second part, the number of search for dollar in Turkey is taken from Google Trends. According to the information which is dealt with Turkish people, Turkey look like not based on TL, but dollar value .This is because the price of the most of the household appliances changes according to dolar value, leading to have a huge impact on Turkey's Economy or wages may be paid in dollars. Therefore, Turkish people's attention are drawn and invested in dollars especially in August 2018, which was a great increase in dollar value.
+Moreover, the depreciation of TL in August 2018, it is easily seen that Central Bank of Turkey take loans in order to compensate for depreciation of TL. And more interestingly, "dolar" searches are done first in the South East of Turkey(Mardin, Hatay and Şırnak).
+
