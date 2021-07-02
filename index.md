@@ -2,6 +2,10 @@
 
 [click here](https://bu-ie-360.github.io/spring21-veysel-yilmaz/HW.html)
 
+## HW 3
+
+[click here](https://bu-ie-360.github.io/spring21-veysel-yilmaz/HW3.html)
+
 ## Project
 
 [click here](https://bu-ie-360.github.io/spring21-veysel-yilmaz/IE360-Proje.html)

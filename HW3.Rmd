@@ -1,0 +1,284 @@
+---
+title: "HW 3"
+author: "Veysel Yılmaz"
+date: "6/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(zoo)
+library(plotly)
+library(ggplot2)
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(hrbrthemes)
+library(lubridate)
+library(data.table)
+library(forecast)
+library(fpp)
+library(xts)
+library(tidyverse)
+library(caret)
+library(leaps)
+library(gridExtra)
+library(GGally)
+```
+
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+## Introduction and Preprocessing 
+ 
+### Data Investigation
+
+The assignment objective is to investigate electricity consumption data from [https://seffaflik.epias.com.tr/transparency/tuketim/gerceklesen-tuketim/gercek-zamanli-tuketim.xhtml] and to decompose it its trend-cycle,seasonal and random components using AR, MA and ARMA models and finally to forecast the electricity consumption between 6-20 Mayin Turkey. First things first , i read the data and applied some transformations : 
+
+```{r}
+data_path='C:\\Users\\Veysel\\Downloads\\ConsumptioanData.csv'
+consumption=fread(data_path)
+consumption[,datetime:=with(consumption, dmy(Date) + hm(Hour))]
+consumption[,Date:=dmy(Date)]
+consumption[,Hour:=as.numeric(hm(Hour))/3600]
+consumption[,`Consumption (MWh)`:=as.numeric(gsub(",", "", `Consumption (MWh)`))]
+head(consumption,25)
+str(consumption)
+```
+We converted characters to Date,num,num and POSIXct respectivelly.
+Here is the  time-series plot of the data : 
+
+```{r}
+ggplot( consumption,aes(x=datetime, y=`Consumption (MWh)`)) +
+  geom_line(color="magenta") +
+  ylab("Consumption") +
+  xlab("Date")
+```
+
+We can observe that there seems to be a weekly repeating pattern in data if we zoom in closer :
+
+```{r eval=TRUE,echo=FALSE}
+ggplot( consumption[1:700],aes(x=datetime[1:700], y=`Consumption (MWh)`[1:700])) +
+  geom_line(color="red") +
+  ylab("Consumption") +
+  xlab("Date")
+```
+
+If we zoom out a bit , now we can monthly repeating patterns. Both weekly and monthly behaviour will be critical to choose the correct seasonality frequency. 
+
+```{r eval=TRUE,echo=FALSE}
+ggplot( consumption[1:4000],aes(x=datetime[1:4000], y=`Consumption (MWh)`[1:4000])) +
+  geom_line(color="blue") +
+  ylab("Consumption") +
+  xlab("Date")
+```
+
+### Stationarity and Differencing
+Before applying AR,MA and ARMA models , we need to check whether the given data is stationary or not. Nonstationary data is problematic and it violates our arima model assumptions.
+
+```{r eval=TRUE,echo=FALSE}
+require(urca)
+unt_test=ur.kpss(consumption$`Consumption (MWh)`) 
+summary(unt_test)
+```
+
+Raw data give us 12.695 as the test-statistic,which means that we should reject the null hypothesis stating data is stationary.Hence the data is not stationary.
+```{r}
+daily_consumption=consumption$`Consumption (MWh)`-shift(consumption$`Consumption (MWh)`,168)
+unt_test=ur.kpss(daily_consumption) 
+summary(unt_test)
+```
+
+If we apply 168-lag shifting (considering both weekly and daily seasonality), then we get 0.052 as the test-statistic which means that we can not reject the null hypothesis.Hence the lagged data is stationary.
+
+#### Hourly Decomposition
+
+To hourly decompose i used frequency equaling 1 , here we can see there is no particular hourly seasonality when frequency is 1.
+```{r eval=TRUE,echo=FALSE}
+hourly <- ts(consumption$`Consumption (MWh)`,start(2016,1,1),frequency=1.00001)
+hourly_dec<-decompose(hourly,type="additive")
+plot(hourly_dec) 
+```
+
+#### Daily Decomposition 
+To daily decompose i used frequency equaling 24. Every 24-hour cycle we will notice daily seasonality.As we can see there is a rapid seasonality in daily data.
+```{r eval=TRUE,echo=FALSE}
+daily <- ts(consumption$`Consumption (MWh)`,start(2016,1,1),frequency=24)
+daily_dec<-decompose(daily,type="additive")
+plot(daily_dec) 
+```
+
+#### Weekly Decomposition
+I used frequency equaling 168(24*7) since we had hourly raw data.The trend component got rid of its noise and the random component seems to be white but we need to look at it afterwards.
+```{r eval=TRUE,echo=FALSE}
+weekly <- ts(consumption$`Consumption (MWh)`,start(2016,1,1),frequency=24*7)
+weekly_dec<-decompose(weekly,type="additive")
+plot(weekly_dec) 
+```
+
+#### Monthly Decomposition
+To apply monthly decomposition i used frequency equaling 24*365.25/12 since every four year we have a leap year and number of days in a year should be 365+1/4 and we have to multiply it by 24 for each hourly data and divide it 12 to get monthly seasonality.Here we can see that trend component is still readable but we have lots of random noise which is overwhelming.
+```{r eval=TRUE,echo=FALSE}
+monthly <- ts(consumption$`Consumption (MWh)`,start(2016,1,1),frequency=24*365.25/12)
+monthly_dec<-decompose(monthly,type="additive")
+plot(monthly_dec) 
+```
+
+#### Yearly Decomposition
+Yearly decomposition is same as in monthly one except we dont divide the frequency by 12. Here we see a random-walkish pattern in trend-cycle component and the noise is highly accumulated in random component. 
+```{r eval=TRUE,echo=FALSE}
+yearly <- ts(consumption$`Consumption (MWh)`,start(2016,1,1),frequency=24*365.25)
+yearly_dec<-decompose(yearly,type="additive")
+plot(yearly_dec) 
+```
+
+### Deseasonalize and Detrend 
+I chose 168 as seasonality frequency since both daily and weekly seasons seem to be effective and they dont have huge noise as in monthly and yearly ones.Here we see firstly the deseasonalized data and then we also extract the trend so that we get the random component.Random noise seems to be zero-mean and constant variance but there are several abnormal spikes which may be caused by some special days,events.
+
+```{r eval=TRUE,echo=FALSE}
+deseasonalized=weekly_dec$x- weekly_dec$seasonal
+plot(deseasonalized)
+detrended = deseasonalized-weekly_dec$trend
+plot(detrended)
+```
+
+
+Before selecting p and q values in ARMA models , we need to investigate acf and pacf graphs.As we can see there is an exponentially decaying seasonality in the random component of decomposed data. This occurs due to not introducing differencing.When we substract raw data from its 168-lagged version, we get rid of this repetitive seasonality pattern in random component but it did not effect too much in my simulations, hence i continued with the original random component.
+
+```{r  eval=TRUE,echo=FALSE}
+acf(detrended,na.action=na.pass,168)
+pacf(detrended,na.action=na.pass,168)
+```
+
+From acf graph , we may play with p=1 to 5 or 6 and q=1 or 2 but we should also try q = 1 to 5 since the random component still contains seasonality effects.
+
+```{r eval=TRUE,echo=FALSE}
+require(urca)
+rooot=ur.kpss(detrended) 
+summary(rooot)
+```
+
+Reviewing the root test , we observe that the random component is stationary since it approves the null hypothesis saying that the data is stationary.Now we can continue with AR models.
+
+## AR,MA and ARMA models
+
+### AR Models 
+
+I tried p=1 to 5.Since we dont apply any differencing and the modelling is a non-seasonal arima ,we get huge AIC,BIC values ranging around 720-730k.
+```{r eval=TRUE,echo=FALSE}
+model_ar_1<- arima(detrended, order=c(1,0,0))
+print(model_ar_1)
+AIC(model_ar_1)
+BIC(model_ar_1)
+model_ar_2<- arima(detrended, order=c(2,0,0))
+print(model_ar_2)
+AIC(model_ar_2)
+BIC(model_ar_2)
+model_ar_3<- arima(detrended, order=c(3,0,0))
+print(model_ar_3)
+AIC(model_ar_3)
+BIC(model_ar_3)
+model_ar_4<- arima(detrended, order=c(4,0,0))
+print(model_ar_4)
+AIC(model_ar_4)
+BIC(model_ar_4)
+model_ar_5<- arima(detrended, order=c(5,0,0))
+print(model_ar_5)
+AIC(model_ar_5)
+BIC(model_ar_5)
+```
+
+Here i chose p=3, eventhough p=5,6 or 7 were giving better results , it was not marginally effecive. To save performance in terms of time , i chose p=3 and it will be sufficient enough.
+
+### MA models
+Again applying q=1 to 5, we observe significant changes in AIC values but not much. I increased q=5 up to 10 , it improved but again increase margin was not satisfactory, hence i chose 5 as q parameter.
+```{r eval=TRUE,echo=FALSE}
+model_ma_1<- arima(detrended, order=c(0,0,1))
+print(model_ma_1)
+AIC(model_ma_1)
+BIC(model_ma_1)
+model_ma_2<- arima(detrended, order=c(0,0,2))
+print(model_ma_2)
+AIC(model_ma_2)
+BIC(model_ma_2)
+model_ma_3<- arima(detrended, order=c(0,0,3))
+print(model_ma_3)
+AIC(model_ma_3)
+BIC(model_ma_3)
+model_ma_4<- arima(detrended, order=c(0,0,4))
+print(model_ma_4)
+AIC(model_ma_4)
+BIC(model_ma_4)
+model_ma_5<- arima(detrended, order=c(0,0,5))
+print(model_ma_5)
+AIC(model_ma_5)
+BIC(model_ma_5)
+```
+
+### ARMA Model
+
+Now our model is arma with p=3 and q=5. After getting the proper model i obtained the predicted random component and then i applied additive ts model to get back estimated comsumption values.Here is its visualization : 
+```{r eval=TRUE,echo=TRUE }
+model <- arima(detrended, order=c(3,0,5))
+print(model)
+AIC(model)
+BIC(model)
+model_fitted <- detrended - residuals(model)
+model_fitted_transformed <- model_fitted+weekly_dec$trend+weekly_dec$seasonal
+plot(detrended[8000:10000], xlab = "Data Point Indexes(dately sorted)", ylab = "Consumption of residuals")
+points(model_fitted[8000:10000], type = "l", col = 2, lty = 2)
+plot(weekly, xlab = "Data Point Indexes(dately sorted)", ylab = "Total Consumption",xlim = c(270,283)) 
+points(model_fitted_transformed, type = "l", col = 2, lty = 2,xlim = c(270,283))
+```
+
+We can see that residuals resemble each other and we nearly got perfect fitting in training data. Data seem to be overfitted but its not our objective today.
+
+
+## Forecasting
+
+Before applying forecasting, i need to point out something , at start i used all data as training data from 6 May to 20 May , hence the test data is vanished in my approach but not quite. We know that there is always NA values at the edges by 168/2=84 due to seasonality approach ; therefore i predicted last 84-hour NA values in data but i actually modelled and predicted the remaining part of last 336(14*24)-84=252 values since the residuals of model gave me the coefficients of remaining 336-84= 252-hour values in 14 day span. I also replaced the NA values in first 84-hour values by the mean of next 84-hour values. Then i applied predict function.
+```{r eval=TRUE,echo=TRUE}
+#forecasting
+Residuals_fitted = residuals((model))
+consumption[,fitted_residuals:=Residuals_fitted]
+consumption[,modelled_consumption:=model_fitted_transformed]
+first_na=mean(consumption$modelled_consumption[85:168])
+first_na_res=mean(consumption$fitted_residuals[85:168])
+consumption$modelled_consumption[1:84]=first_na
+consumption$fitted_residuals[1:84]=first_na_res
+test_data = consumption$`Consumption (MWh)`[46849:47208]
+res_tes=predict(model,n.ahead = 84)$pred
+```
+
+Here i obtained the last trend and last season values from decomposed data since we need to return in additive ts model format. Since last 84 values are missing,
+i took next 84 non-NA values from trend and season components. Then i add them up with additive manner.
+
+```{r eval=TRUE,echo=TRUE}
+last_trend = tail(weekly_dec$trend[!is.na(weekly_dec$trend)],84)
+last_season= tail(weekly_dec$seasonal[!is.na(weekly_dec$seasonal)],84)
+comb = res_tes+last_trend+last_season
+consumption$modelled_consumption[47125:47208]=comb
+plot(consumption$`Consumption (MWh)`[46872:47208], xlab = "Last 14 Day Data with numeric indexing", ylab = "Total Consumption",ylim=range(0:50000),type="l") 
+points(consumption$modelled_consumption[46872:47208], type = "l", col = "red", lty = 2,ylim=range(0:50000))
+```
+
+Here we see the last 14-day span electricity consumption data and its predictions.Since i used test data inside the training data , we get nearly perfect estimations up to last 84 hour.After not getting current updated real data , the model struggled a bit to mimic and predict the remaining hours.I can name couple of reasons why we got relatively large errors: 1) We used ARMA model not ARIMA , hence not introducing integrated model may give us distortions at the end. 2) Differencing is not applied , even we would have been applied it would not affect too much, i tried it aswell. No reason to not mention about it , nevertheless. 3) we used non-seasonal arma model , SARIMA model would perform better after seeing acf and pacf graphs of random component. 4) We did not add any external regressor , hence ARIMAX or SARIMA with regressor would overperform our model.
+
+### WMAPE Evaluation
+To grasp a good overall performance notion, i used weighted mean percentage error as an evaluation method.Here i use this site : [https://ibf.org/knowledge/glossary/weighted-mean-absolute-percentage-error-wmape-299] and at the end i took average WMAPE and it gave me 4.31 error percentage, it seems like the model did a good job but it is not fully correct. Only last 84-hour WAPE gave me around 12 percent error which is quite a lot. 
+```{r eval=TRUE,echo=TRUE}
+err=abs(consumption$`Consumption (MWh)`[46872:47208]-consumption$modelled_consumption[46872:47208])
+percentage=err/consumption$`Consumption (MWh)`[46872:47208]
+wape=(sum(percentage)/360)*100
+```
+
+
+## Conclusion
+
+I investigated the electricity consumption data and decomposed it its components then i took the random component to further apply ar,ma and arma models. The performance of arma model is better between those three since we have power of lags and errors at the same time in ARMA model. Autocorrelation is one of the main issues even if we use arma model, and including test data in the training data performs much better . Forecasting was not a direct forecasting , i mean that i forecasted missing values to get forecasted estimated data , hence i doubled the possibility of error.Nevertheless , the results are promising and i look forward to apply more advance and sofisticated methods. Stay tuned !
+
+
