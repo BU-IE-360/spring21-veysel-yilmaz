@@ -40,7 +40,7 @@ knitr::opts_chunk$set(echo = TRUE)
 The assignment objective is to investigate electricity consumption data from [https://seffaflik.epias.com.tr/transparency/tuketim/gerceklesen-tuketim/gercek-zamanli-tuketim.xhtml] and to decompose it its trend-cycle,seasonal and random components using AR, MA and ARMA models and finally to forecast the electricity consumption between 6-20 Mayin Turkey. First things first , i read the data and applied some transformations : 
 
 ```{r}
-data_path='C:\\Users\\Veysel\\Downloads\\ConsumptioanData.csv'
+data_path='C:\\Users\\Veysel\\Downloads\\ConsumptionData.csv'
 consumption=fread(data_path)
 consumption[,datetime:=with(consumption, dmy(Date) + hm(Hour))]
 consumption[,Date:=dmy(Date)]
