@@ -149,7 +149,7 @@ library(urca)
 library(ggplot2)
 library(dplyr)
 
-rawdata <- read.csv("C:/Users/Yunus Emre TOPRAK/Desktop/ProjectRawData.csv", header=TRUE)
+rawdata <- read.csv("C:/Users/Veysel/Documents/GitHub/spring21-veysel-yilmaz/ProjectRawData.csv", header=TRUE)
 alldata<-rbind(rawdata,data)
 alldata<-as.data.table(alldata)
 
